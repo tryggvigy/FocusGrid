@@ -1,4 +1,5 @@
-type InteractiveEl = HTMLButtonElement | HTMLAnchorElement
+type InteractiveElement = HTMLButtonElement | HTMLAnchorElement
+
 export enum Direction {
   UP = 'up',
   DOWN = 'down',
@@ -59,7 +60,7 @@ export function moveFocus(
 
   if (!ensureFocusableElementInGrid(grid)) return
 
-  const currentFocus = grid.querySelector<InteractiveEl>('[tabindex="0"]')!
+  const currentFocus = getFocusedElement(grid)
 
   if (direction === Direction.UP) {
     const nextCell = findNextCell(grid, currentFocus, Direction.UP)
@@ -81,7 +82,7 @@ export function moveFocus(
   }
 
   if (direction === Direction.LEFT) {
-    const nextEl = findNextElementInCell(currentFocus, -1)
+    const nextEl = findNextElementInCell(currentFocus, Direction.LEFT)
     // Exit early if next focusable element is found in the cell
     if (nextEl) {
       transferFocus(currentFocus, nextEl)
@@ -92,13 +93,13 @@ export function moveFocus(
     if (!nextCell) return
 
     // Target the last interactive element in the cell to the left
-    const prevCellElems = nextCell.querySelectorAll<InteractiveEl>('a, button')
-    const lastLink = prevCellElems[prevCellElems.length - 1]
-    transferFocus(currentFocus, lastLink)
+    const prevInteractiveElems = getInteractiveElements(nextCell)
+    const last = prevInteractiveElems[prevInteractiveElems.length - 1]
+    transferFocus(currentFocus, last)
   }
 
   if (direction === Direction.RIGHT) {
-    const nextEl = findNextElementInCell(currentFocus, 1)
+    const nextEl = findNextElementInCell(currentFocus, Direction.RIGHT)
     // Exit early if next focusable element is found in the cell
     if (nextEl) {
       transferFocus(currentFocus, nextEl)
@@ -109,11 +110,12 @@ export function moveFocus(
     if (!nextCell) return
 
     // Target the first interactive element in the cell to the right
-    const nextCellEl = nextCell.querySelectorAll<InteractiveEl>('a, button')
-    const firstEl = nextCellEl[0]
-    transferFocus(currentFocus, firstEl)
+    const nextInteractiveElems = getInteractiveElements(nextCell)
+    const first = nextInteractiveElems[0]
+    transferFocus(currentFocus, first)
   }
 }
+
 /**
  * Move focus to the first interactive element in the given row.
  * This is useful when a row element is clicked with a mouse.
@@ -127,9 +129,9 @@ export function moveFocusToFirstInteractiveElementInRow(
 ): void {
   const grid = row.closest<HTMLDivElement>('[role="grid"]')
   if (!grid) return
-  const firstElem = row.querySelectorAll<InteractiveEl>('a, button')[0]
-  const currentFocusable = grid.querySelector<InteractiveEl>('[tabindex="0"]')
-  transferFocus(currentFocusable, firstElem)
+  const first = getInteractiveElements(row)[0]
+  const currentFocusable = getFocusedElement(grid)
+  transferFocus(currentFocusable, first)
 }
 
 /**
@@ -144,10 +146,10 @@ export function moveFocusToFirstInteractiveElementInRow(
  * @param grid grid element to check
  */
 function ensureFocusableElementInGrid(grid: HTMLDivElement): boolean {
-  const firstElem = grid.querySelectorAll<InteractiveEl>('a, button')[0]
-  const currentFocusable = grid.querySelector('[tabindex="0"]') || firstElem
+  const first = getInteractiveElements(grid)[0]
+  const currentFocusable = getFocusedElement(grid) || first
 
-  // Happens if the grid does not contain any a or button elements.
+  // Happens if the grid does not contain any interactive elements.
   if (!currentFocusable) {
     return false
   }
@@ -164,35 +166,30 @@ function ensureFocusableElementInGrid(grid: HTMLDivElement): boolean {
  * @param cell the next cell to find the corresponding interactive element in
  */
 function getCorrespondingInteractiveElementInCell(
-  element: InteractiveEl,
+  element: InteractiveElement,
   cell: HTMLDivElement
-): InteractiveEl {
-  const elementCell = element.closest('[aria-colindex]')!
-  const allInteractiveElements = Array.from(
-    elementCell.querySelectorAll<InteractiveEl>('a, button')
-  )
+): InteractiveElement {
+  const elementCell = getClosestCell(element)
+  const allInteractiveElements = getInteractiveElements(elementCell)
   const currentElementIndex = allInteractiveElements.indexOf(element)
 
-  const cellInteractives = cell.querySelectorAll<InteractiveEl>('a, button')
+  const cellInteractives = getInteractiveElements(cell)
   return cellInteractives[currentElementIndex] || cellInteractives[0]
 }
 
 /**
  * Find the next/previous interactive element in the cell of provded element
  * @param element element to start search from
- * @param dir direction to search in, 1 : next, -1 : previous
+ * @param dir direction to search in
  */
 function findNextElementInCell(
-  element: InteractiveEl,
-  dir: 1 | -1
-): InteractiveEl | null {
-  const cellElements = Array.from(
-    element
-      .closest('[aria-colindex]')!
-      .querySelectorAll<InteractiveEl>('a, button')
-  )
-  const prevIndex = cellElements.findIndex((l) => l === element) + dir
-  return cellElements[prevIndex]
+  element: InteractiveElement,
+  direction: Direction.LEFT | Direction.RIGHT
+): InteractiveElement | null {
+  const elementCell = getClosestCell(element)
+  const cellElements = getInteractiveElements(elementCell)
+  const shift = direction === Direction.LEFT ? -1 : 1
+  return cellElements[cellElements.indexOf(element) + shift]
 }
 
 /**
@@ -203,22 +200,18 @@ function findNextElementInCell(
  */
 function findNextCell(
   grid: HTMLDivElement,
-  element: InteractiveEl,
+  element: InteractiveElement,
   direction: Direction
 ): HTMLDivElement | null {
-  const elementRow = element.closest<HTMLDivElement>('[aria-rowindex]')!
+  const elementRow = getClosestRow(element)
 
   if (direction === Direction.DOWN) {
-    const allRows = Array.from(
-      grid.querySelectorAll<HTMLDivElement>('[aria-rowindex]')
-    )
-    const colIndex = element
-      .closest('[aria-colindex]')!
-      .getAttribute('aria-colindex')!
-    const elementRowIndex = allRows.indexOf(elementRow)
+    const rows = getRows(grid)
+    const colIndex = getClosestCell(element).getAttribute('aria-colindex')
+    const elementRowIndex = rows.indexOf(elementRow)
 
-    for (let i = elementRowIndex + 1; i < allRows.length; i++) {
-      const nextRow = allRows[i]
+    for (let i = elementRowIndex + 1; i < rows.length; i++) {
+      const nextRow = rows[i]
       const cellInNextRow = nextRow.querySelector<HTMLDivElement>(
         `[aria-colindex="${colIndex}"]`
       )
@@ -227,16 +220,12 @@ function findNextCell(
   }
 
   if (direction === Direction.UP) {
-    const allRows = Array.from(
-      grid.querySelectorAll<HTMLDivElement>('[aria-rowindex]')
-    )
-    const elementRowIndex = allRows.indexOf(elementRow)
-    const colIndex = element
-      .closest('[aria-colindex]')!
-      .getAttribute('aria-colindex')!
+    const rows = getRows(grid)
+    const elementRowIndex = rows.indexOf(elementRow)
+    const colIndex = getClosestCell(element).getAttribute('aria-colindex')!
 
     for (let i = elementRowIndex - 1; i >= 0; i--) {
-      const nextRow = allRows[i]
+      const nextRow = rows[i]
       const cellInNextRow = nextRow.querySelector<HTMLDivElement>(
         `[aria-colindex="${colIndex}"]`
       )
@@ -245,10 +234,8 @@ function findNextCell(
   }
 
   if (direction === Direction.LEFT) {
-    const allCellsInRow = Array.from(
-      elementRow.querySelectorAll<HTMLDivElement>('[aria-colindex]')
-    )
-    const elementCell = element.closest<HTMLDivElement>('[aria-colindex]')!
+    const allCellsInRow = getCells(elementRow)
+    const elementCell = getClosestCell(element)
     const elementCellIndex = allCellsInRow.indexOf(elementCell)
 
     for (let i = elementCellIndex - 1; i >= 0; i--) {
@@ -258,10 +245,8 @@ function findNextCell(
   }
 
   if (direction === Direction.RIGHT) {
-    const allCellsInRow = Array.from(
-      elementRow.querySelectorAll<HTMLDivElement>('[aria-colindex]')
-    )
-    const elementCell = element.closest<HTMLDivElement>('[aria-colindex]')!
+    const allCellsInRow = getCells(elementRow)
+    const elementCell = getClosestCell(element)
     const elementCellIndex = allCellsInRow.indexOf(elementCell)
 
     for (let i = elementCellIndex + 1; i < allCellsInRow.length; i++) {
@@ -276,12 +261,12 @@ function findNextCell(
 
 /**
  * Move focus from oldEl -> newEl
- * @param oldEl element loosing focus
+ * @param oldEl element losing focus
  * @param newEl element gaining focus
  */
 function transferFocus(
-  oldEl: InteractiveEl | null,
-  newEl: InteractiveEl
+  oldEl: InteractiveElement | null,
+  newEl: InteractiveElement
 ): void {
   if (oldEl) oldEl.tabIndex = -1
   if (newEl) {
@@ -291,7 +276,38 @@ function transferFocus(
 }
 
 function containsInteractiveElements(element: Element | null): boolean {
-  if (!element) return false
-  if (element.querySelector('a, button')) return true
-  return false
+  return !!element?.querySelector('a, button')
+}
+
+function getInteractiveElements(element: Element): Array<InteractiveElement> {
+  return Array.from(element.querySelectorAll('a, button') || [])
+}
+
+function getRows(element: Element): Array<HTMLDivElement> {
+  return Array.from(element.querySelectorAll('[aria-rowindex]') || [])
+}
+
+function getCells(element: Element): Array<HTMLDivElement> {
+  return Array.from(element.querySelectorAll('[aria-colindex]') || [])
+}
+
+// Assume grid is well structured and element always has a column
+function getClosestRow(element: Element): HTMLDivElement {
+  const row = element.closest<HTMLDivElement>('[aria-rowindex]')!
+  // eslint-disable-next-line no-console
+  if (!row) console.warn(element, 'is not inside a row')
+  return row
+}
+
+// Assume grid is well structured and element always has a column
+function getClosestCell(element: Element): HTMLDivElement {
+  const cell = element.closest<HTMLDivElement>('[aria-colindex]')!
+  // eslint-disable-next-line no-console
+  if (!cell) console.warn(element, 'is not inside a cell')
+  return cell
+}
+
+// Assumes grid element contains at least one focusable element
+function getFocusedElement(element: Element): InteractiveElement {
+  return element.querySelector<InteractiveElement>('[tabindex="0"]')!
 }

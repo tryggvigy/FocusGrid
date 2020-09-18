@@ -36,25 +36,25 @@ export const FocusGrid = React.forwardRef<HTMLDivElement, Props>(
 
     const handleKeyDown = useCallback(
       (e: KeyboardEvent<HTMLDivElement>) => {
+        const isUp = e.key === 'ArrowUp'
+        const isDown = e.key === 'ArrowDown'
+        const isLeft = e.key === 'ArrowLeft'
+        const isRight = e.key === 'ArrowRight'
+
         // Prevent scrolling
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (isUp || isDown) {
           e.preventDefault()
         }
 
-        if (
-          e.key === 'ArrowUp' ||
-          e.key === 'ArrowDown' ||
-          e.key === 'ArrowLeft' ||
-          e.key === 'ArrowRight'
-        ) {
+        if (isUp || isDown || isLeft || isRight) {
           // Enable focus outline
           document.documentElement.classList.remove('no-focus-outline')
         }
 
-        if (e.key === 'ArrowUp') moveFocus(gridRef.current, Direction.UP)
-        if (e.key === 'ArrowDown') moveFocus(gridRef.current, Direction.DOWN)
-        if (e.key === 'ArrowLeft') moveFocus(gridRef.current, Direction.LEFT)
-        if (e.key === 'ArrowRight') moveFocus(gridRef.current, Direction.RIGHT)
+        if (isUp) moveFocus(gridRef.current, Direction.UP)
+        if (isDown) moveFocus(gridRef.current, Direction.DOWN)
+        if (isLeft) moveFocus(gridRef.current, Direction.LEFT)
+        if (isRight) moveFocus(gridRef.current, Direction.RIGHT)
 
         onKeyDown(e)
       },
